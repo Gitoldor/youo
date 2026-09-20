@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1,viewport-fit=cover">
+
+  <meta name="theme-color" content="#ffffff">
+
+  <title>FCM PWA Test</title>
+
+  <link rel="manifest" href="./manifest.json">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      min-height: 100%;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f5f5f7;
+      color: #111;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .card {
+      width: min(100%, 420px);
+      padding: 28px;
+      border-radius: 26px;
+      background: #fff;
+      box-shadow:
+        0 15px 50px rgba(0,0,0,.10);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 27px;
+      letter-spacing: -.5px;
+    }
+
+    .description {
+      margin: 0;
+      color: #777;
+      line-height: 1.5;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 24px;
+      padding: 16px;
+      border: 0;
+      border-radius: 16px;
+      background: #111;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition:
+        transform .15s ease,
+        opacity .15s ease;
+    }
+
+    button:active {
+      transform: scale(.97);
+    }
+
+    button:disabled {
+      opacity: .5;
+      cursor: default;
+    }
+
+    #status {
+      margin: 18px 0 0;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #555;
+      word-break: break-word;
+    }
+  </style>
+</head>
+
+<body>
+
+  <main class="card">
+
+    <h1>FCM PWA Test</h1>
+
+    <p class="description">
+      Test Firebase Cloud Messaging notifications.
+    </p>
+
+    <button id="enableNotifications">
+      Enable Notifications
+    </button>
+
+    <p id="status">
+      Notifications are currently disabled.
+    </p>
+
+  </main>
+
+
+  <script type="module">
+
+    /* =====================================================
+       FIREBASE
+    ===================================================== */
+
+    import { initializeApp }
+      from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+
+    import {
+      getMessaging,
+      getToken,
+      onMessage
+    }
+      from "https://www.gstatic.com/firebasejs/12.19.0/firebase-messaging.js";
+
+
+    /* =====================================================
+       FIREBASE CONFIG
+    ===================================================== */
+
+    const firebaseConfig = {
+
+      apiKey:
+        "AIzaSyDTAxtHeLqrexk6QJjbQUgVAnKH7F_QS1g",
+
+      authDomain:
+        "websirp-bafb8.firebaseapp.com",
+
+      databaseURL:
+        "https://websirp-bafb8-default-rtdb.firebaseio.com",
+
+      projectId:
+        "websirp-bafb8",
+
+      storageBucket:
+        "websirp-bafb8.appspot.com",
+
+      messagingSenderId:
+        "200318173998",
+
+      appId:
+        "1:200318173998:web:3a460bcb4cdc4dc11ef0bf",
+
+      measurementId:
+        "G-P8E559PRWW"
+    };
+
+
+    /* =====================================================
+       INITIALIZE FIREBASE
+    ===================================================== */
+
+    const app =
+      initializeApp(firebaseConfig);
+
+    const messaging =
+      getMessaging(app);
+
+
+    /* =====================================================
+       VAPID KEY
+    ===================================================== */
+
+    const VAPID_KEY =
+      "BPlLWsuW6b0_Hi72kiJtjAm8R249PrpToNQkCEkrsxDrdPEYYYjT6_UnHZTmEPvJCM9favP8OadxiJcKU3Y8NYM";
+
+
+    /* =====================================================
+       ELEMENTS
+    ===================================================== */
+
+    const button =
+      document.getElementById(
+        "enableNotifications"
+      );
+
+    const status =
+      document.getElementById(
+        "status"
+      );
+
+
+    /* =====================================================
+       SERVICE WORKER
+    ===================================================== */
+
+    let swRegistration = null;
+
+
+    async function registerFCMServiceWorker() {
+
+      if (!("serviceWorker" in navigator)) {
+
+        throw new Error(
+          "Service workers are not supported."
+        );
+
+      }
+
+
+      swRegistration =
+        await navigator.serviceWorker.register(
+          "./firebase-messaging-sw.js",
+          {
+            scope: "./"
+          }
+        );
+
+
+      await navigator.serviceWorker.ready;
+
+
+      console.log(
+        "FCM service worker ready:",
+        swRegistration
+      );
+
+
+      return swRegistration;
+
+    }
+
+
+    /* =====================================================
+       ENABLE NOTIFICATIONS
+    ===================================================== */
+
+    button.addEventListener(
+      "click",
+      async () => {
+
+        button.disabled = true;
+
+        try {
+
+          status.textContent =
+            "Requesting notification permission...";
+
+
+          /* ---------------------------------------------
+             CHECK SUPPORT
+          --------------------------------------------- */
+
+          if (!("Notification" in window)) {
+
+            throw new Error(
+              "This browser does not support notifications."
+            );
+
+          }
+
+
+          /* ---------------------------------------------
+             REGISTER SERVICE WORKER
+          --------------------------------------------- */
+
+          const registration =
+            await registerFCMServiceWorker();
+
+
+          /* ---------------------------------------------
+             REQUEST PERMISSION
+          --------------------------------------------- */
+
+          const permission =
+            await Notification.requestPermission();
+
+
+          console.log(
+            "Notification permission:",
+            permission
+          );
+
+
+          if (permission !== "granted") {
+
+            status.textContent =
+              "Notification permission was not granted.";
+
+            button.disabled = false;
+
+            return;
+
+          }
+
+
+          /* ---------------------------------------------
+             GET FCM TOKEN
+          --------------------------------------------- */
+
+          status.textContent =
+            "Creating FCM subscription...";
+
+
+          const token =
+            await getToken(
+              messaging,
+              {
+                vapidKey: VAPID_KEY,
+
+                serviceWorkerRegistration:
+                  registration
+              }
+            );
+
+
+          if (!token) {
+
+            throw new Error(
+              "Firebase did not return an FCM token."
+            );
+
+          }
+
+
+          /* ---------------------------------------------
+             TOKEN
+          --------------------------------------------- */
+
+          console.log(
+            "======================================"
+          );
+
+          console.log(
+            "FCM TOKEN:"
+          );
+
+          console.log(token);
+
+          console.log(
+            "======================================"
+          );
+
+
+          status.textContent =
+            "Notifications enabled successfully.";
+
+
+          button.textContent =
+            "Notifications Enabled";
+
+
+        } catch (error) {
+
+          console.error(
+            "FCM ERROR:",
+            error
+          );
+
+
+          status.textContent =
+            "Error: " + error.message;
+
+
+          button.disabled = false;
+
+        }
+
+      }
+    );
+
+
+    /* =====================================================
+       FOREGROUND MESSAGE
+    ===================================================== */
+
+    onMessage(
+      messaging,
+      payload => {
+
+        console.log(
+          "Foreground FCM message:",
+          payload
+        );
+
+
+        const title =
+          payload.notification?.title ||
+          "Sawantwadi";
+
+
+        const body =
+          payload.notification?.body ||
+          "New notification";
+
+
+        if (
+          Notification.permission ===
+          "granted"
+        ) {
+
+          new Notification(
+            title,
+            {
+              body: body
+            }
+          );
+
+        }
+
+      }
+    );
+
+
+  </script>
+
+</body>
+</html>
